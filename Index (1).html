@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirSense | Air Quality Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --page: #07111f;
+            --panel: rgba(15, 29, 49, 0.88);
+            --panel-soft: #12233a;
+            --line: rgba(148, 163, 184, 0.16);
+            --text: #f8fafc;
+            --muted: #91a4bb;
+            --cyan: #38d5ff;
+            --cyan-dark: #0e7490;
+            --green: #39d98a;
+            --orange: #ffb84d;
+            --red: #ff6b81;
+            --shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-width: 320px;
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 8% 0%, rgba(56, 213, 255, 0.14), transparent 28rem),
+                radial-gradient(circle at 90% 25%, rgba(80, 104, 255, 0.12), transparent 24rem),
+                var(--page);
+        }
+
+        .navbar {
+            border-bottom: 1px solid var(--line);
+            background: rgba(4, 12, 24, 0.78);
+            backdrop-filter: blur(18px);
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .nav-content, .container, .footer-content { max-width: 1180px; margin: 0 auto; }
+        .nav-content {
+            min-height: 76px;
+            padding: 0 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-mark {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            font-size: 21px;
+            background: linear-gradient(135deg, #1bc5ed, #5267ff);
+            box-shadow: 0 8px 24px rgba(56, 213, 255, 0.22);
+        }
+        .brand h1 { margin: 0; font-size: clamp(18px, 2.2vw, 25px); letter-spacing: -0.5px; }
+        .brand p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+        .live { color: var(--green); font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px var(--green); }
+
+        .container { padding: 34px 28px 56px; }
+        .hero { margin-bottom: 24px; }
+        .eyebrow { color: var(--cyan); text-transform: uppercase; letter-spacing: 1.8px; font-size: 11px; font-weight: 800; }
+        .hero h2 { margin: 8px 0 8px; font-size: clamp(27px, 4vw, 42px); letter-spacing: -1.6px; }
+        .hero p { color: var(--muted); margin: 0; max-width: 680px; }
+
+        .toolbar {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px;
+            margin-bottom: 24px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: var(--panel);
+            box-shadow: var(--shadow);
+        }
+        .field { display: grid; gap: 7px; }
+        .field label { color: var(--muted); font-size: 12px; font-weight: 700; }
+        select, button {
+            border: 0;
+            border-radius: 10px;
+            font: inherit;
+        }
+        select {
+            min-width: 220px;
+            padding: 12px 40px 12px 14px;
+            color: var(--text);
+            background-color: var(--panel-soft);
+            border: 1px solid var(--line);
+        }
+        button {
+            padding: 12px 20px;
+            color: #03111d;
+            background: linear-gradient(135deg, var(--cyan), #6b8cff);
+            cursor: pointer;
+            font-weight: 800;
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(56, 213, 255, .2); }
+        .toolbar button { height: 44px; }
+
+        .section-label { margin: 28px 0 12px; color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; }
+        .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        .metric, .status-card, .chart-container, .analysis-card {
+            border: 1px solid var(--line);
+            background: linear-gradient(145deg, rgba(20, 39, 64, .92), rgba(11, 24, 42, .92));
+            box-shadow: var(--shadow);
+        }
+        .metric { padding: 20px; border-radius: 16px; }
+        .metric-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .metric-label { color: var(--muted); font-size: 13px; font-weight: 700; }
+        .metric-icon { font-size: 18px; }
+        .metric-value { margin-top: 13px; font-size: 28px; font-weight: 850; letter-spacing: -1px; }
+        .metric-unit { color: var(--muted); font-size: 12px; font-weight: 500; }
+
+        .status-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 24px;
+            margin-top: 14px;
+            border-radius: 18px;
+            overflow: hidden;
+            position: relative;
+        }
+        .status-card::after { content: ""; position: absolute; width: 190px; height: 190px; right: -55px; top: -80px; border-radius: 50%; background: rgba(255,255,255,.05); }
+        .status-kicker { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.4px; }
+        .status-card h3 { margin: 8px 0 5px; font-size: 24px; }
+        .status-card p { color: var(--muted); margin: 0; }
+        .status-badge { z-index: 1; padding: 10px 14px; border-radius: 999px; font-weight: 800; color: #07111f; background: {{ '#39d98a' if color == 'green' else '#ffb84d' if color == 'orange' else '#ff6b81' }}; }
+
+        .analysis-card { border-radius: 16px; padding: 20px; margin-top: 14px; }
+        .model-card { margin-top: 14px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(145deg, rgba(20, 39, 64, .92), rgba(11, 24, 42, .92)); box-shadow: var(--shadow); }
+        .model-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+        .model-stat { padding: 13px; border-radius: 11px; background: rgba(3, 12, 25, .48); }
+        .model-stat strong { display: block; margin-top: 5px; font-size: 19px; color: var(--text); }
+        .model-stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+        .importance-list { display: grid; gap: 9px; margin-top: 18px; }
+        .importance-row { display: grid; grid-template-columns: 58px 1fr 42px; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+        .importance-track { height: 7px; overflow: hidden; border-radius: 99px; background: rgba(148, 163, 184, .14); }
+        .importance-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), #6b8cff); }
+        .card-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+        .card-heading h3 { margin: 0; font-size: 17px; }
+        .analysis { display: none; margin: 16px 0 0; padding: 15px; border-radius: 11px; color: #c9e8f4; background: rgba(3, 12, 25, .6); line-height: 1.7; font-size: 14px; }
+        .secondary-button { padding: 9px 13px; color: #c7f5ff; background: rgba(56, 213, 255, .1); border: 1px solid rgba(56, 213, 255, .25); font-size: 12px; }
+
+        .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 14px; }
+        .chart-container { min-width: 0; padding: 20px; border-radius: 18px; }
+        .chart-container.wide { grid-column: 1 / -1; }
+        .chart-meta { color: var(--muted); font-size: 12px; margin: 7px 0 18px; }
+        .canvas-wrap { height: 310px; position: relative; }
+        .wide .canvas-wrap { height: 350px; }
+        canvas { width: 100% !important; height: 100% !important; }
+
+        .footer { padding: 20px 28px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+        .footer-content { display: flex; justify-content: space-between; gap: 15px; }
+        @media (max-width: 800px) {
+            .metrics { grid-template-columns: repeat(2, 1fr); }
+            .chart-grid { grid-template-columns: 1fr; }
+            .chart-container.wide { grid-column: auto; }
+        }
+        @media (max-width: 560px) {
+            .nav-content, .container { padding-left: 18px; padding-right: 18px; }
+            .live { display: none; }
+            .toolbar { align-items: stretch; flex-direction: column; }
+            select { width: 100%; }
+            .toolbar button { width: 100%; }
+            .metrics { gap: 10px; }
+            .metric { padding: 15px; }
+            .metric-value { font-size: 23px; }
+            .status-card { align-items: flex-start; flex-direction: column; }
+            .model-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-content">
+            <div class="brand">
+                <div class="brand-mark">🌍</div>
+                <div>
+                    <h1>AirSense</h1>
+                    <p>Air quality intelligence system</p>
+                </div>
+            </div>
+            <span id="liveStatus" class="live">LIVE MONITORING</span>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <div class="eyebrow">Environmental overview</div>
+            <h2>Understand the air around you.</h2>
+            <p>Explore historical pollution trends and model-based AQI forecasts for cities across India.</p>
+        </section>
+
+        <form class="toolbar" action="/filter" method="post">
+            <div class="field">
+                <label for="city">SELECT LOCATION</label>
+                <select id="city" name="city">
+                    {% for city in cities %}
+                    <option value="{{city}}" {% if city == selected_city %}selected{% endif %}>{{city}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit">Refresh dashboard&nbsp; →</button>
+        </form>
+
+        {% if latest_aqi is defined %}
+        <div class="section-label">Latest readings · {{ selected_city }}</div>
+        <section class="metrics">
+            <article class="metric">
+                <div class="metric-top"><span class="metric-label">Current AQI</span><span class="metric-icon">◉</span></div>
+                <div id="currentAqi" class="metric-value">{{ latest_aqi|round(1) }}</div>
+                <span class="metric-unit">historical CSV · live updates unavailable</span>
+            </article>
+            <article class="metric">
+                <div class="metric-top"><span class="metric-label">Predicted AQI</span><span class="metric-icon">✦</span></div>
+                <div class="metric-value">{{ pred }}</div>
+                <span class="metric-unit">model forecast</span>
+            </article>
+            <article class="metric">
+                <div class="metric-top"><span class="metric-label">PM2.5</span><span class="metric-icon">◌</span></div>
+                <div id="pm25Value" class="metric-value">{{ pm25_val|round(1) }} <span class="metric-unit">µg/m³</span></div>
+                <span class="metric-unit">fine particles</span>
+            </article>
+            <article class="metric">
+                <div class="metric-top"><span class="metric-label">PM10</span><span class="metric-icon">◌</span></div>
+                <div id="pm10Value" class="metric-value">{{ pm10_val|round(1) }} <span class="metric-unit">µg/m³</span></div>
+                <span class="metric-unit">coarse particles</span>
+            </article>
+        </section>
+
+        <section class="status-card">
+            <div>
+                <div class="status-kicker">Health outlook</div>
+                <h3>{{ advice }}</h3>
+                <p>Use the trends below to understand how conditions are changing over time.</p>
+            </div>
+            <div class="status-badge">{{ 'GOOD' if color == 'green' else 'MODERATE' if color == 'orange' else 'NEEDS CARE' }}</div>
+        </section>
+        <p id="liveUpdated" class="chart-meta" style="margin: 12px 0 0;">Live monitoring requires an OPENWEATHER_API_KEY environment variable.</p>
+
+        <section class="analysis-card">
+            <div class="card-heading">
+                <h3>📊 Executive analysis</h3>
+                <button class="secondary-button" type="button" onclick="toggle('dynamicAnalysis')">Read analysis</button>
+            </div>
+            <div id="dynamicAnalysis" class="analysis">{{ analysis|safe }}</div>
+        </section>
+
+        <section class="model-card">
+            <div class="card-heading">
+                <h3>✦ Model performance</h3>
+                <span class="chart-meta" style="margin: 0;">Validated on a held-out test set</span>
+            </div>
+            <div class="model-grid">
+                <div class="model-stat"><span>Selected model</span><strong>{{ model_name }}</strong></div>
+                <div class="model-stat"><span>Mean absolute error</span><strong>{{ model_mae }}</strong></div>
+                <div class="model-stat"><span>R² score</span><strong>{{ model_r2 }}</strong></div>
+            </div>
+            <div class="chart-meta" style="margin-bottom: 0; margin-top: 18px;">Relative feature influence</div>
+            <div class="importance-list">
+                {% for item in feature_importance %}
+                <div class="importance-row">
+                    <span>{{ item.name }}</span>
+                    <div class="importance-track"><div class="importance-fill" style="width: {{ [item.value, 100]|min }}%;"></div></div>
+                    <span>{{ item.value }}%</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <div class="section-label">Trends & composition</div>
+        <section class="chart-grid">
+            <article class="chart-container wide">
+                <div class="card-heading">
+                    <h3>📈 AQI over time</h3>
+                    <button class="secondary-button" type="button" onclick="toggle('aqiInfo')">About this chart</button>
+                </div>
+                <p class="chart-meta">Daily AQI readings · lower values indicate cleaner air</p>
+                <div id="aqiInfo" class="analysis">This chart tracks the selected city's AQI across the available measurement period. Hover over the line to inspect an individual reading.</div>
+                <div class="canvas-wrap"><canvas id="aqiChart"></canvas></div>
+            </article>
+            <article class="chart-container">
+                <div class="card-heading">
+                    <h3>📊 Particulate matter</h3>
+                    <button class="secondary-button" type="button" onclick="toggle('barInfo')">About this chart</button>
+                </div>
+                <p class="chart-meta">PM2.5 vs PM10 · daily concentration</p>
+                <div id="barInfo" class="analysis">Compare fine and coarse particulate matter levels across the selected period. The compact axis keeps long date ranges readable.</div>
+                <div class="canvas-wrap"><canvas id="barChart"></canvas></div>
+            </article>
+            <article class="chart-container">
+                <div class="card-heading">
+                    <h3>◉ Latest composition</h3>
+                    <button class="secondary-button" type="button" onclick="toggle('pieInfo')">About this chart</button>
+                </div>
+                <p class="chart-meta">Relative share of the latest PM readings</p>
+                <div id="pieInfo" class="analysis">This view shows how the latest PM2.5 and PM10 readings compare with each other.</div>
+                <div class="canvas-wrap"><canvas id="pieChart"></canvas></div>
+            </article>
+        </section>
+        {% endif %}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content"><span>AirSense · Data-driven air quality insights</span><span>Built for healthier decisions</span></div>
+    </footer>
+
+    {% if latest_aqi is defined %}
+    <script>
+        const selectedCity = {{ selected_city|tojson }};
+        const dates = {{ dates|tojson }};
+        const aqi = {{ aqi|tojson }};
+        const pm25 = {{ pm25|tojson }};
+        const pm10 = {{ pm10|tojson }};
+        const gridColor = 'rgba(148, 163, 184, 0.13)';
+        const tickColor = '#91a4bb';
+        const commonScales = {
+            x: { grid: { display: false }, ticks: { color: tickColor, maxTicksLimit: 8, maxRotation: 0 } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } }
+        };
+        const tooltip = { backgroundColor: '#0b192c', borderColor: 'rgba(56,213,255,.35)', borderWidth: 1, padding: 12, displayColors: true };
+
+        new Chart(document.getElementById('aqiChart'), {
+            type: 'line',
+            data: { labels: dates, datasets: [{ label: 'AQI', data: aqi, borderColor: '#38d5ff', backgroundColor: 'rgba(56,213,255,.12)', fill: true, tension: .35, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: '#38d5ff', pointHoverBorderWidth: 3, borderWidth: 2 }] },
+            options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { labels: { color: '#d8e6f4', usePointStyle: true, padding: 18 } }, tooltip }, scales: commonScales }
+        });
+        new Chart(document.getElementById('barChart'), {
+            type: 'bar',
+            data: { labels: dates, datasets: [{ label: 'PM2.5', data: pm25, backgroundColor: 'rgba(255,107,129,.75)', borderRadius: 3 }, { label: 'PM10', data: pm10, backgroundColor: 'rgba(255,184,77,.75)', borderRadius: 3 }] },
+            options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { labels: { color: '#d8e6f4', usePointStyle: true, padding: 18 } }, tooltip }, scales: commonScales }
+        });
+        new Chart(document.getElementById('pieChart'), {
+            type: 'doughnut',
+            data: { labels: ['PM2.5', 'PM10'], datasets: [{ data: [{{ pm25_val }}, {{ pm10_val }}], backgroundColor: ['#ff6b81', '#ffb84d'], borderColor: '#12233a', borderWidth: 5, hoverOffset: 8 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '67%', plugins: { legend: { position: 'bottom', labels: { color: '#d8e6f4', usePointStyle: true, padding: 20 } }, tooltip } }
+        });
+        function toggle(id) {
+            const element = document.getElementById(id);
+            element.style.display = element.style.display === 'block' ? 'none' : 'block';
+        }
+        async function refreshLiveData() {
+            const status = document.getElementById('liveStatus');
+            const updated = document.getElementById('liveUpdated');
+            try {
+                const response = await fetch(`/api/live/${encodeURIComponent(selectedCity)}`);
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.error || 'Live data unavailable');
+                document.getElementById('currentAqi').textContent = payload.estimated_aqi;
+                document.getElementById('pm25Value').innerHTML = `${payload.pm25} <span class="metric-unit">µg/m³</span>`;
+                document.getElementById('pm10Value').innerHTML = `${payload.pm10} <span class="metric-unit">µg/m³</span>`;
+                status.textContent = 'LIVE · OPENWEATHER';
+                updated.textContent = `Updated ${new Date(payload.updated_at).toLocaleString()} · model-estimated AQI from live pollutants · provider index ${payload.provider_index ?? 'n/a'}`;
+            } catch (error) {
+                status.textContent = 'LIVE DATA UNAVAILABLE';
+                updated.textContent = error.message;
+            }
+        }
+        refreshLiveData();
+        window.setInterval(refreshLiveData, 10 * 60 * 1000);
+    </script>
+    {% endif %}
+</body>
+</html>
